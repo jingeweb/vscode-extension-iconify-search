@@ -1,103 +1,78 @@
-import type { FC } from 'react';
-import { useEffect, useState } from 'react';
-import { Tabs } from 'antd';
-import type { Icon } from '../../common';
-import { simpleSearchIcons } from '../search';
-import { GROUP_ALL_KEY, globalStore } from '../store';
+import { vm, watch } from 'jinge';
+
+import { Button } from '../components/Button';
+import { Tabs, type TabOption } from '../components/Tabs';
 import { t } from '../locale';
+import { createIconResults } from '../results';
+import { GROUP_ALL_KEY, globalStore } from '../store';
 import { Gallery } from './Gallery';
 import { Search } from './Search';
 
-export const IconsView: FC = () => {
-  const [icons, setIcons] = useState<Icon[]>([]);
-  const [searchText, setSearchText] = globalStore.useStore('searchText');
-  const [favorTabs] = globalStore.useStore('favorTabs');
-  const [tabs, setTabs] = useState<
-    {
-      label: string;
-      key: string;
-    }[]
-  >([
-    {
-      label: t('ALL'),
-      key: GROUP_ALL_KEY,
-    },
-  ]);
-  const [groupTab, setGroupTab] = globalStore.useStore('groupTab');
-
-  const searchIcons = () => {
-    const { searchText, groupTab, all } = globalStore.getStore();
-    const t = searchText?.trim() ?? '';
-    if (!t) {
-      if (groupTab === GROUP_ALL_KEY) setIcons(globalStore.get('allFlat'));
-      else {
-        setIcons(all.get(groupTab)?.icons ?? []);
-      }
-    } else {
-      const result = simpleSearchIcons(t, groupTab === GROUP_ALL_KEY ? '' : groupTab);
-      setIcons(result);
-    }
-  };
-
-  const [all] = globalStore.useStore('all');
-  useEffect(() => {
-    setTabs((v) => {
-      const newTabs = [...new Set([...favorTabs, ...all.keys()]).values()]
-        .filter((k) => all.has(k))
-        .map((key) => {
-          return {
-            label: all.get(key)?.name as string,
-            key,
-          };
-        });
-      newTabs.unshift(v[0]);
-      return newTabs;
-    });
-  }, [favorTabs, all]);
-
-  const selectTab = (tab: string) => {
-    setGroupTab(tab);
-    searchIcons();
-  };
-
-  useEffect(() => {
-    searchIcons();
-  }, [all]);
-
+export function IconsView() {
+  const results = createIconResults();
+  const resultState = results.state;
+  const state = vm({ tabs: [] as TabOption[] });
+  function updateTabs() {
+    state.tabs = [
+      { label: t('ALL'), value: GROUP_ALL_KEY },
+      ...[...new Set([...globalStore.favorTabs, ...globalStore.all.keys()])]
+        .filter((key) => globalStore.all.has(key))
+        .map((key) => ({ label: globalStore.all.get(key)!.name, value: key })),
+    ];
+  }
+  watch(globalStore, 'all', updateTabs, { immediate: true });
+  watch(globalStore, 'favorTabs', updateTabs, { deep: true });
   return (
     <>
       <Search
-        value={searchText}
-        onSearch={(t) => {
-          if (searchText !== t) {
-            setSearchText(t);
-            searchIcons();
-          }
+        value={globalStore.searchText}
+        on:search={(value) => {
+          globalStore.searchText = value;
         }}
       />
       <Tabs
-        size='small'
-        items={tabs}
-        activeKey={groupTab}
-        onChange={(k) => {
-          selectTab(k);
+        options={state.tabs}
+        value={globalStore.groupTab}
+        label={t('Category:')}
+        on:change={(value) => {
+          globalStore.groupTab = value;
         }}
       />
-
-      {!!icons.length && <Gallery icons={icons} />}
-      {!icons.length && groupTab !== GROUP_ALL_KEY && (
-        <div
-          className='mt-2 cursor-pointer py-1 text-center text-xs hover:text-hover'
-          onClick={() => {
-            selectTab(GROUP_ALL_KEY);
-          }}
-        >
-          {t('No icons yet, click to view all icons')}
-        </div>
+      {resultState.error && resultState.count > 0 && (
+        <button type='button' on:click={() => results.retry()}>
+          {t('Retry')}
+        </button>
       )}
-      {!icons.length && groupTab === GROUP_ALL_KEY && (
-        <div className='mt-2 py-1 text-center text-xs'>{t('No Icons')}</div>
+      {resultState.count > 0 ? (
+        <Gallery
+          count={resultState.count}
+          revision={resultState.revision}
+          resetKey={resultState.resetKey}
+          getIcon={results.getIcon}
+          on:range={results.range}
+        />
+      ) : (
+        <div className='ui-empty'>
+          {resultState.loading ? (
+            <span className='ui-spinner' />
+          ) : resultState.error ? (
+            <button type='button' on:click={() => results.retry()}>
+              {t('Could not load icons. Please try again.')} {t('Retry')}
+            </button>
+          ) : globalStore.groupTab === GROUP_ALL_KEY ? (
+            t('No Icons')
+          ) : (
+            <Button
+              quiet
+              on:click={() => {
+                globalStore.groupTab = GROUP_ALL_KEY;
+              }}
+            >
+              {t('No icons yet, click to view all icons')}
+            </Button>
+          )}
+        </div>
       )}
     </>
   );
-};
+}

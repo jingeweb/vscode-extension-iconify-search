@@ -13,7 +13,7 @@ export interface Icon {
 export interface IconCategory {
   category: string;
   name: string;
-  icons: Icon[];
+  count: number;
 }
 
 export type IconCodeType =

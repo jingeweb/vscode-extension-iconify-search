@@ -1,5 +1,6 @@
-import { presetPalettes, presetDarkPalettes } from '@ant-design/colors';
 import type { IntRange } from 'type-fest';
+
+import { presetPalettes, presetDarkPalettes } from '@ant-design/colors';
 /** 需要引入的颜色名称 */
 const PalleteNames = [
   'red',

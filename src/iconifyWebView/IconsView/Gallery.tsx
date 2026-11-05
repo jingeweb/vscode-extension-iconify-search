@@ -1,111 +1,96 @@
-import type { FC } from 'react';
-import { useEffect, useRef, useState } from 'react';
+import { For, KEY_DATA, onMount, onUnmount, ref, vm, vmIgnore, watch } from 'jinge';
+
 import type { Icon } from '../../common';
-import { ICON_GAP, ICON_SIZE, Ic } from '../Ic';
 
-const IcList: FC<{ translateY: number; renderIcons: Icon[] }> = ({ translateY, renderIcons }) => {
-  const [icons, setIcons] = useState<Icon[]>([]);
-  const [ty, setTy] = useState(0);
-  const x = useRef(0);
-  useEffect(() => {
-    window.clearTimeout(x.current);
-    x.current = window.setTimeout(() => {
-      setIcons([]);
-      x.current = window.setTimeout(() => {
-        setTy(translateY);
-        setIcons(renderIcons);
-      });
-    });
-  }, [renderIcons, translateY]);
-  useEffect(() => {
-    return () => window.clearTimeout(x.current);
-  }, []);
+import { Ic } from '../Ic';
+import { galleryLayout } from './galleryLayout';
 
-  return (
-    <div
-      className='relative flex w-full flex-wrap overflow-hidden will-change-transform'
-      style={{
-        gap: ICON_GAP,
-        // height: innerVisualHeight,
-        transform: `translateY(${ty}px)`,
-      }}
-    >
-      {icons.map((ic) => (
-        <Ic icon={ic} key={ic.id} />
-      ))}
-    </div>
-  );
-};
-export const Gallery: FC<{ icons: Icon[] }> = ({ icons }) => {
-  const el = useRef<HTMLDivElement>(null);
-  const [scrollHeight, setScrollHeight] = useState(0);
-  const [translateY, setTranslateY] = useState(0);
-  const [renderIcons, setRenderIcons] = useState<Icon[]>([]);
-
-  // const x = useRef(0);
-  const preIconStartIndex = useRef(-1);
-  const calcRenderIcons = (allIcons: Icon[], force = false) => {
-    if (!el.current) return;
-    const W = (el.current.children[0] as HTMLDivElement).offsetWidth;
-    // console.log(W, el.current.offsetWidth);
-    let iconCountOfRow = Math.floor(W / (ICON_SIZE + ICON_GAP));
-    if (W - iconCountOfRow * (ICON_SIZE + ICON_GAP) >= ICON_SIZE) {
-      iconCountOfRow += 1;
-    }
-    const startRow = Math.floor(el.current.scrollTop / (ICON_SIZE + ICON_GAP));
-
-    const visualHeight = el.current.offsetHeight;
-    const visualRowCount = Math.ceil(visualHeight / (ICON_SIZE + ICON_GAP));
-    const iconStartIndex = iconCountOfRow * startRow;
-    // console.log(
-    //   iconCountOfRow,
-    //   startRow,
-    //   visualRowCount,
-    //   iconStartIndex,
-    //   visualRowCount * iconCountOfRow,
-    // );
-    if (preIconStartIndex.current !== iconStartIndex || force) {
-      preIconStartIndex.current = iconStartIndex;
-      // console.log(iconStartIndex, visualRowCount, iconCountOfRow);
-      // console.log(icons.slice(iconStartIndex, iconStartIndex + visualRowCount * iconCountOfRow));
-      setTranslateY(startRow * (ICON_SIZE + ICON_GAP));
-      setRenderIcons(
-        allIcons.slice(iconStartIndex, iconStartIndex + visualRowCount * iconCountOfRow),
+export function Gallery(props: {
+  count: number;
+  revision: number;
+  resetKey: number;
+  getIcon: (index: number) => Icon | undefined;
+  'on:range': (start: number, end: number) => void;
+}) {
+  const element = ref<HTMLDivElement>();
+  const state = vm({
+    height: 0,
+    translateY: 0,
+    cells: vmIgnore([] as { index: number; icon?: Icon }[]),
+  });
+  let frame = 0;
+  let lastStart = -1,
+    lastEnd = -1,
+    lastRevision = -1;
+  let cells = new Map<number, { index: number; icon?: Icon }>();
+  function update(reset = false) {
+    const container = element.value;
+    if (!container) return;
+    if (reset) container.scrollTop = 0;
+    const layout = galleryLayout(
+      props.count,
+      container.clientWidth,
+      container.clientHeight,
+      container.scrollTop,
+    );
+    state.height = layout.totalHeight;
+    state.translateY = layout.translateY;
+    if (
+      reset ||
+      layout.start !== lastStart ||
+      layout.end !== lastEnd ||
+      props.revision !== lastRevision
+    ) {
+      const next = new Map<number, { index: number; icon?: Icon }>();
+      state.cells = vmIgnore(
+        Array.from({ length: layout.end - layout.start }, (_, offset) => {
+          const index = layout.start + offset;
+          const icon = props.getIcon(index);
+          const previous = cells.get(index);
+          const cell = previous && previous.icon === icon ? previous : vmIgnore({ index, icon });
+          next.set(index, cell);
+          return cell;
+        }),
       );
+      cells = next;
+      lastStart = layout.start;
+      lastEnd = layout.end;
+      lastRevision = props.revision;
     }
-  };
-  useEffect(() => {
-    if (!el.current) return;
-    const W = (el.current.children[0] as HTMLDivElement).offsetWidth;
-    // console.log(W, el.current.offsetWidth);
-    let iconCountOfRow = Math.floor(W / (ICON_SIZE + ICON_GAP));
-    if (W - iconCountOfRow * (ICON_SIZE + ICON_GAP) >= ICON_SIZE) {
-      iconCountOfRow += 1;
-    }
-    const totalRows = Math.ceil(icons.length / iconCountOfRow);
-    const totalHeight = (totalRows + 2) * (ICON_SIZE + ICON_GAP);
-    el.current.scrollTop = 0;
-    setScrollHeight(totalHeight);
-    // console.log('CCC', icons.length);
-    calcRenderIcons(icons, true);
-  }, [icons]);
-
-  const handleScroll = () => {
-    if (!el.current) return;
-    calcRenderIcons(icons);
-  };
-
+    props['on:range'](layout.start, layout.end);
+  }
+  function schedule() {
+    if (!frame)
+      frame = requestAnimationFrame(() => {
+        frame = 0;
+        update();
+      });
+  }
+  watch(props, 'count', schedule);
+  watch(props, 'revision', schedule);
+  watch(props, 'resetKey', () => update(true));
+  onMount(() => {
+    update(true);
+    const observer = new ResizeObserver(schedule);
+    observer.observe(element.value!);
+    return () => observer.disconnect();
+  });
+  onUnmount(() => cancelAnimationFrame(frame));
   return (
-    <div
-      ref={el}
-      className='relative h-0 w-full flex-1 select-none overflow-y-scroll'
-      onScroll={() => {
-        handleScroll();
-      }}
-    >
-      <div className='relative w-full' style={{ height: scrollHeight }}>
-        <IcList translateY={translateY} renderIcons={renderIcons} />
+    <div ref={element} className='icon-gallery' on:scroll={schedule}>
+      <div className='gallery-spacer' style={`height:${state.height}px;`}>
+        <div className='gallery-row' style={`transform:translateY(${state.translateY}px);`}>
+          <For loop={state.cells} key={KEY_DATA}>
+            {(each) =>
+              each.data.icon ? (
+                <Ic icon={each.data.icon} />
+              ) : (
+                <div className='icon-card' aria-busy='true' />
+              )
+            }
+          </For>
+        </div>
       </div>
     </div>
   );
-};
+}

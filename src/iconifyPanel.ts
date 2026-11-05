@@ -1,258 +1,346 @@
-import path from 'path';
-import fs from 'fs/promises';
-import type { Disposable, Tab, Webview, WebviewPanel } from 'vscode';
-import { Uri, ViewColumn, env, l10n, window, workspace } from 'vscode';
-import { t } from '@vscode/l10n';
+import type { Disposable, Progress, Tab, Webview, WebviewPanel } from 'vscode';
+
+import path from 'node:path';
+import { Uri, ViewColumn, ProgressLocation, env, l10n, window, workspace } from 'vscode';
+
+import type { SettingsData, WebviewInitData } from './common';
+import type { IconCursor, IconQuery } from './iconifyCatalogTypes';
+
+import { IconifyCatalog, type CatalogProgress } from './iconifyCatalog';
 import _tpl from './iconifyPanel.html?raw';
 import { getNonce, replaceTpl } from './util';
-import type { SettingsData, WebviewInitData } from './common';
-// import type { IconCategory } from './common';
+import { getWebviewResources } from './webviewResources';
 
 const PanelTitle = l10n.t('Iconify Icons');
-
 const ExtensionId = 'iconifySearch';
-const FavorTabs = 'favorTabs';
-const FavorIcons = 'favorIcons';
-const FavorGroup = 'favorGroup';
-const CodeType = 'codeType';
-
 function getConf<T>(key: string, defaultValue: T) {
   return (workspace.getConfiguration(ExtensionId)?.get(key) ?? defaultValue) as T;
 }
 function setConf<T>(key: string, value: T) {
   return workspace.getConfiguration(ExtensionId)?.update(key, value);
 }
-const getConfFavorTabs = () => getConf<string[]>(FavorTabs, []);
-const getConfFavorIcons = () => getConf<string[]>(FavorIcons, []);
+const getConfFavorTabs = () => getConf<string[]>('favorTabs', []);
+const getConfFavorIcons = () => getConf<string[]>('favorIcons', []);
+type ShowOptions = { mode: WebviewInitData['mode']; searchText?: string };
+function validCursor(value: unknown): value is IconCursor | undefined {
+  if (value === undefined) return true;
+  if (!value || typeof value !== 'object') return false;
+  const cursor = value as IconCursor;
+  return (
+    typeof cursor.name === 'string' &&
+    cursor.name.length <= 256 &&
+    typeof cursor.prefix === 'string' &&
+    cursor.prefix.length <= 256 &&
+    Number.isFinite(cursor.score) &&
+    (cursor.favoriteOffset === undefined ||
+      (Number.isSafeInteger(cursor.favoriteOffset) &&
+        cursor.favoriteOffset >= 0 &&
+        cursor.favoriteOffset <= 10000))
+  );
+}
 export class IconifySearchPanel {
   public static readonly viewType = ExtensionId;
   private _panel?: WebviewPanel;
+  private _panelDisposables: Disposable[] = [];
+  private readonly _catalog: IconifyCatalog;
+  private _progress?: Progress<{ message?: string; increment?: number }>;
+  private _progressPercent = 0;
+  private _updating?: Promise<void>;
+  private _webviewReady = false;
+  private _pendingOptions?: ShowOptions;
+  private _disposed = false;
+  private _settingsWrites: Promise<void> = Promise.resolve();
 
-  private _disposables: Disposable[] = [];
-
-  constructor(private readonly _extensionUri: Uri) {
-    // workspace.onDidChangeConfiguration(
-    //   () => {
-    //     void this._panel?.webview.postMessage({
-    //       type: 'update:setting',
-    //     });
-    //   },
-    //   null,
-    //   this._disposables,
-    // );
+  constructor(
+    private readonly _extensionUri: Uri,
+    globalStorageUri: Uri,
+    private readonly _devServerUrl?: string,
+  ) {
+    this._catalog = new IconifyCatalog(
+      globalStorageUri.fsPath,
+      path.join(_extensionUri.fsPath, 'out', 'iconifyDatabaseWorker.cjs'),
+      env.language,
+      (progress) => this._reportDataProgress(progress),
+      (error) => console.error(error),
+    );
+    this._catalog.onDidChange(() => {
+      void this._sendCatalog().catch(console.error);
+    });
   }
-
-  // private async _loadLogo() {
-  //   if (this._logo) return this._logo;
-  //   const icpath = Uri.joinPath(this._extensionUri, 'resources', 'iconify.svg');
-  //   const ic = encodeURIComponent(await readFile(icpath.fsPath, 'utf-8'));
-
-  //   this._logo = {
-  //     dark: Uri.from({
-  //       scheme: 'data',
-  //       path: 'image/svg+xml,' + ic.replace('currentColor', 'red'), // 'rgb(23, 105, 170)'),
-  //     }),
-  //     light: Uri.from({
-  //       scheme: 'data',
-  //       path: 'image/svg+xml,' + ic.replace('currentColor', 'rgb(23, 105, 170)'),
-  //     }),
-  //   };
-  //   return this._logo;
-  // }
-  private async _saveSettings(data: SettingsData) {
-    const entries = Object.entries(data);
-    for await (const ent of entries) {
-      await setConf(ent[0], ent[1]);
+  // Activation starts preparation even when no Iconify panel has been opened.
+  public async start() {
+    try {
+      await this._catalog.start();
+      await this._ensureIcons(Boolean(this._catalog.snapshot));
+    } catch (error) {
+      console.error(error);
+      if (!this._disposed)
+        void window.showErrorMessage(l10n.t('Could not load Iconify icons: {0}', String(error)));
+    }
+  }
+  private _reportDataProgress(data: CatalogProgress) {
+    if (data.stage === 'checking') {
+      this._progress?.report({ message: l10n.t('Checking the latest Iconify version on npm…') });
+    } else if (data.stage === 'extracting') {
+      this._progress?.report({
+        message: l10n.t('Verifying and extracting Iconify {0}…', data.version ?? ''),
+      });
+    } else if (data.stage === 'building') {
+      this._progress?.report({
+        message: l10n.t(
+          'Preparing Iconify database: {0}/{1} collections',
+          data.completed,
+          data.total,
+        ),
+      });
+    } else {
+      const downloaded = ((data.downloadedBytes ?? 0) / 1_000_000).toFixed(1);
+      if (data.totalBytes) {
+        const percent = Math.min(
+          100,
+          Math.floor(((data.downloadedBytes ?? 0) / data.totalBytes) * 100),
+        );
+        const increment = Math.max(0, percent - this._progressPercent);
+        this._progressPercent = Math.max(this._progressPercent, percent);
+        this._progress?.report({
+          message: l10n.t(
+            'Downloading Iconify {0}: {1}% ({2}/{3} MB)',
+            data.version ?? '',
+            percent,
+            downloaded,
+            (data.totalBytes / 1_000_000).toFixed(1),
+          ),
+          increment,
+        });
+      } else
+        this._progress?.report({
+          message: l10n.t(
+            'Downloading Iconify {0}: {1} MB downloaded',
+            data.version ?? '',
+            downloaded,
+          ),
+        });
+    }
+  }
+  private _ensureIcons(background: boolean): Promise<void> {
+    if (!this._updating) {
+      this._updating = Promise.resolve(
+        window.withProgress(
+          {
+            location: background ? ProgressLocation.Window : ProgressLocation.Notification,
+            title: background
+              ? l10n.t('Updating Iconify icons')
+              : l10n.t('Preparing Iconify icons'),
+          },
+          async (progress) => {
+            this._progress = progress;
+            this._progressPercent = 0;
+            try {
+              await this._catalog.ensure();
+            } finally {
+              this._progress = undefined;
+            }
+          },
+        ),
+      ).finally(() => {
+        this._updating = undefined;
+      });
+    }
+    return this._updating;
+  }
+  private async _sendCatalog() {
+    const panel = this._panel;
+    const snapshot = this._catalog.snapshot;
+    if (panel && this._webviewReady && snapshot) {
+      await panel.webview.postMessage({ type: 'catalog:ready', ...snapshot });
+    }
+  }
+  private async _queryIcons(panel: WebviewPanel, message: Record<string, unknown>) {
+    if (
+      !Number.isSafeInteger(message.requestId) ||
+      !Number.isSafeInteger(message.generation) ||
+      typeof message.text !== 'string' ||
+      message.text.length > 512 ||
+      (message.category !== undefined &&
+        (typeof message.category !== 'string' || message.category.length > 256)) ||
+      !validCursor(message.cursor)
+    )
+      return;
+    await this._settingsWrites;
+    const generation = message.generation as number;
+    const query: IconQuery = {
+      text: message.text,
+      category: message.category as string | undefined,
+      cursor: message.cursor,
+      favorites: message.favorites === true ? getConfFavorIcons() : undefined,
+    };
+    try {
+      const page = await this._catalog.query(query, generation);
+      if (
+        this._panel === panel &&
+        this._webviewReady &&
+        generation === this._catalog.snapshot?.generation
+      )
+        await panel.webview.postMessage({
+          type: 'icons:page',
+          requestId: message.requestId,
+          generation,
+          ...page,
+        });
+    } catch (error) {
+      if (this._panel === panel && this._webviewReady)
+        await panel.webview.postMessage({
+          type: 'icons:page',
+          requestId: message.requestId,
+          generation,
+          error: String(error),
+        });
+    }
+  }
+  private async _saveSettings(data: Partial<SettingsData>) {
+    for (const key of ['favorTabs', 'favorGroup', 'codeType'] as const) {
+      if (data[key] !== undefined) await setConf(key, data[key]);
     }
   }
   private _getIconifyTab(): Tab | undefined {
-    let tab = undefined;
-    window.tabGroups.all.some((tg) => {
-      tab = tg.tabs.find((t) => t.label === PanelTitle);
-      return !!tab;
-    });
-    return tab;
+    return window.tabGroups.all
+      .flatMap((group) => group.tabs)
+      .find((tab) => tab.label === PanelTitle);
   }
-  private async _upFavorIcon(op: 'add' | 'rm', id: string) {
-    const fics = getConfFavorIcons();
-    const idx = fics.indexOf(id);
-    if (op === 'add') {
-      if (idx >= 0) return;
-      fics.push(id);
-    } else {
-      if (idx < 0) return;
-      fics.splice(idx, 1);
-    }
-    await setConf(FavorIcons, fics);
+  private async _upFavorIcon(operation: 'add' | 'rm', id: string) {
+    const favorites = new Set(getConfFavorIcons());
+    if (operation === 'add') favorites.add(id);
+    else favorites.delete(id);
+    await setConf('favorIcons', [...favorites]);
   }
-  private async _loadIcons() {
-    const root = workspace.workspaceFolders?.[0].uri.fsPath;
-    if (!root) {
-      void window.showErrorMessage(t('Please open a directory to use Iconify Search extension'));
-      return;
-    }
-    const iconifyJsonDir = path.join(root, 'node_modules', '@iconify/json', 'json');
+  public async show(options: ShowOptions) {
     try {
-      const st = await fs.stat(iconifyJsonDir);
-      if (!st.isDirectory()) {
-        void window.showErrorMessage(t('Please install "@iconify/json" by npm/pnpm/yarn.'));
-        return;
-      }
-    } catch (ex) {
-      console.error(ex);
-      if ((ex as { code: string }).code === 'ENOENT') {
-        void window.showErrorMessage(t('Please install "@iconify/json" by npm/pnpm/yarn.'));
-      } else {
-        void window.showErrorMessage(`${ex}`);
-      }
+      await this._catalog.start();
+      if (!this._catalog.snapshot) await this._ensureIcons(false);
+    } catch (error) {
+      console.error(error);
+      void window.showErrorMessage(l10n.t('Could not load Iconify icons: {0}', String(error)));
       return;
     }
-    const files = await fs.readdir(iconifyJsonDir);
-    // 优先加载搜藏的图标分类
-    const favorFiles = getConfFavorTabs()
-      .map((t) => `${t}.json`)
-      .filter((f) => files.includes(f));
-    const allFiles =
-      favorFiles.length > 0 ? [...new Set(favorFiles.concat(files)).values()] : files;
-    if (files.length !== allFiles.length) {
-      throw new Error('impossible');
-    }
-
-    const GROUP_SIZE = 35;
-    const groups = Math.ceil(allFiles.length / GROUP_SIZE);
-    // const st = Date.now();
-    // console.log('send start');
-    for (let i = 0; i < groups; i++) {
-      const bufs = await Promise.all(
-        allFiles.slice(i * GROUP_SIZE, (i + 1) * GROUP_SIZE).map((f) => {
-          return fs.readFile(path.join(iconifyJsonDir, f));
-        }),
-      );
-      await this._panel?.webview.postMessage({
-        type: 'load:files',
-        bufs: bufs.map((buf) => buf.buffer),
-      });
-    }
-  }
-  public async show(options: { mode: WebviewInitData['mode']; searchText?: string }) {
+    if (this._disposed) return;
     if (this._panel) {
-      await this._panel.webview.postMessage({
-        type: 'update:mode',
-        ...options,
-      });
-      const tab = this._getIconifyTab();
-      if (!tab) throw new Error('impossible');
-      if (!tab.isActive) {
-        // 当前版本 vscode 暂不支持打开已经存在但不是激活状态的 tab。
-        // 但官方已经规划支持：https://github.com/microsoft/vscode/issues/188572
-        // 待 API 支持后，激活已经存在的 iconify-search tab。
-        void window.showInformationMessage(
-          t(`TODO: Active Iconify Search tab when VSCode Extension API is ready`),
-        );
-        // window.activeTab(tab);
+      this._pendingOptions = options;
+      if (this._panel.visible && this._webviewReady) {
+        if (await this._panel.webview.postMessage({ type: 'update:mode', ...options }))
+          this._pendingOptions = undefined;
       }
-
-      return;
+      this._panel.reveal(this._panel.viewColumn);
+    } else {
+      const panel = window.createWebviewPanel(
+        IconifySearchPanel.viewType,
+        PanelTitle,
+        window.activeTextEditor?.viewColumn || ViewColumn.One,
+        { enableScripts: true },
+      );
+      this._panel = panel;
+      this._webviewReady = false;
+      panel.onDidDispose(
+        () => {
+          if (this._panel === panel) {
+            this._panel = undefined;
+            this._webviewReady = false;
+            this._pendingOptions = undefined;
+          }
+          this._panelDisposables.splice(0).forEach((disposable) => disposable.dispose());
+        },
+        null,
+        this._panelDisposables,
+      );
+      panel.iconPath = {
+        dark: Uri.joinPath(this._extensionUri, 'resources', 'iconify.svg'),
+        light: Uri.joinPath(this._extensionUri, 'resources', 'iconify.svg'),
+      };
+      panel.webview.html = this._getHtmlForWebview(panel.webview, options);
+      panel.webview.onDidReceiveMessage(
+        (message: Record<string, unknown>) => {
+          if (!message || typeof message !== 'object') return;
+          switch (message.type) {
+            case 'load': {
+              this._webviewReady = true;
+              const pending = this._pendingOptions;
+              this._pendingOptions = undefined;
+              if (pending) void panel.webview.postMessage({ type: 'update:mode', ...pending });
+              void this._sendCatalog().catch(console.error);
+              break;
+            }
+            case 'icons:query':
+              void this._queryIcons(panel, message);
+              break;
+            case 'insert':
+              if (typeof message.code === 'string') void this._insertCode(message.code);
+              break;
+            case 'add-favor-icon':
+            case 'rm-favor-icon':
+              if (typeof message.id === 'string') {
+                const id = message.id;
+                const operation = message.type === 'add-favor-icon' ? 'add' : 'rm';
+                this._settingsWrites = this._settingsWrites
+                  .then(() => this._upFavorIcon(operation, id))
+                  .catch(console.error);
+              }
+              break;
+            case 'save:settings':
+              if (message.data && typeof message.data === 'object') {
+                const data = message.data;
+                this._settingsWrites = this._settingsWrites
+                  .then(() => this._saveSettings(data))
+                  .catch(console.error);
+              }
+              break;
+          }
+        },
+        null,
+        this._panelDisposables,
+      );
     }
-
-    const column = window.activeTextEditor ? window.activeTextEditor.viewColumn : undefined;
-
-    this._panel = window.createWebviewPanel(
-      IconifySearchPanel.viewType,
-      PanelTitle,
-      column || ViewColumn.One,
-      { enableScripts: true },
-    );
-    this._panel.onDidDispose(() => this.dispose(), null, this._disposables);
-    this._panel.iconPath = {
-      dark: Uri.joinPath(this._extensionUri, 'resources', 'iconify.svg'),
-      light: Uri.joinPath(this._extensionUri, 'resources', 'iconify.svg'),
-    };
-    this._panel.webview.html = this._getHtmlForWebview(this._panel.webview, options);
-    this._panel.webview.onDidReceiveMessage(
-      (message) => {
-        switch (message.type) {
-          case 'load':
-            void this._loadIcons();
-            break;
-          case 'insert':
-            void this._insertCode(message.code);
-            break;
-          case 'add-favor-icon': {
-            void this._upFavorIcon('add', message.id);
-            break;
-          }
-          case 'rm-favor-icon': {
-            void this._upFavorIcon('rm', message.id);
-            break;
-          }
-          case 'save:settings': {
-            void this._saveSettings(message.data);
-            break;
-          }
-        }
-      },
-      null,
-      this._disposables,
-    );
+    // The activation check may already be in flight; reuse it rather than download twice.
+    void this._ensureIcons(true).catch(console.error);
   }
   private async _insertCode(code: string) {
     const tab = this._getIconifyTab();
     if (!tab) return;
     await window.tabGroups.close(tab);
-    setTimeout(async () => {
+    setTimeout(() => {
       const editor = window.activeTextEditor;
-      if (!editor) {
-        // void window.showErrorMessage('no editor');
-        return;
-      }
-      // console.log('try insert', editor.selection);
-      void editor.edit((editBuilder) => {
-        editBuilder.insert(editor.selection.start, code);
-      });
+      if (editor) void editor.edit((builder) => builder.insert(editor.selection.start, code));
     }, 200);
   }
-  public dispose() {
-    // console.log('Dispose webview');
-    // Clean up our resources
+  public async dispose() {
+    this._disposed = true;
     this._panel?.dispose();
     this._panel = undefined;
-
-    while (this._disposables.length) {
-      const x = this._disposables.pop();
-      if (x) {
-        x.dispose();
-      }
-    }
+    this._panelDisposables.splice(0).forEach((disposable) => disposable.dispose());
+    await this._catalog.dispose();
   }
-  private _getHtmlForWebview(
-    webview: Webview,
-    options: { mode: WebviewInitData['mode']; searchText?: string },
-  ) {
-    // Get the local path to main script run in the webview, then convert it to a uri we can use in the webview.
+  private _getHtmlForWebview(webview: Webview, options: ShowOptions) {
     const scriptUri = webview.asWebviewUri(
       Uri.joinPath(this._extensionUri, 'out', 'iconifyWebView.js'),
     );
-
     const styleUri = webview.asWebviewUri(
       Uri.joinPath(this._extensionUri, 'out', 'iconifyWebView.css'),
     );
-
-    // Use a nonce to only allow a specific script to be run.
     const nonce = getNonce();
-
     return replaceTpl(_tpl, {
+      ...getWebviewResources({
+        cspSource: webview.cspSource,
+        nonce,
+        scriptUri: scriptUri.toString(),
+        styleUri: styleUri.toString(),
+        devServerUrl: this._devServerUrl,
+      }),
       initData: JSON.stringify({
         ...options,
         locale: env.language,
         favorTabs: getConfFavorTabs(),
         favorIcons: getConfFavorIcons(),
-        favorGroup: getConf(FavorGroup, ''),
-        codeType: getConf(CodeType, ''),
+        favorGroup: getConf('favorGroup', ''),
+        codeType: getConf('codeType', ''),
       }),
-      cspSource: webview.cspSource,
-      scriptUri,
-      styleUri,
       nonce,
     });
   }

@@ -1,28 +1,25 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
+  <head>
+    <meta charset="UTF-8" />
 
-<head>
-  <meta charset="UTF-8">
-
-  <!--
+    <!--
     Use a content security policy to only allow loading images from https or from our extension directory,
     and only allow scripts that have a specific nonce.
   -->
-  <meta http-equiv="Content-Security-Policy"
-    content="default-src 'none'; img-src $cspSource$ data:; style-src $cspSource$ 'unsafe-inline'; script-src 'nonce-$nonce$';">
+    <meta http-equiv="Content-Security-Policy" content="$contentSecurityPolicy$" />
 
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Iconify Icons</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Iconify Icons</title>
 
-  <link href="$styleUri$" rel="stylesheet" />
+    $styles$
+  </head>
 
-</head>
-
-<body>
-  <div id="root" class="w-full h-full"></div>
-  <script nonce="$nonce$">window.ICONIFY_INIT_DATA = $initData$;</script>
-  <script nonce="$nonce$" src="$scriptUri$"></script>
-</body>
-
-
+  <body>
+    <div id="root" class="h-full w-full"></div>
+    <script nonce="$nonce$">
+      window.ICONIFY_INIT_DATA = $initData$;
+    </script>
+    $scripts$
+  </body>
 </html>

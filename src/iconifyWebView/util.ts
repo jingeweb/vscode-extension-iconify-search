@@ -23,7 +23,11 @@ export const copyToClipboard = (textToCopy: string) => {
   textArea.select();
   return new Promise<void>((res, rej) => {
     // exec copy command and remove text area
-    document.execCommand('copy') ? res() : rej();
+    if (document.execCommand('copy')) {
+      res();
+    } else {
+      rej();
+    }
     textArea.remove();
   });
 };

@@ -1,51 +1,73 @@
-import { Button, Input, Space } from 'antd';
-import { useEffect, useRef, useState, type FC } from 'react';
+import { onUnmount, vm, watch } from 'jinge';
+
+import { Button } from '../components/Button';
 import { t } from '../locale';
 
-export const Search: FC<{
-  value?: string;
-  onSearch: (v: string) => void;
-}> = ({ onSearch, value }) => {
-  const [text, setText] = useState(value ?? '');
-  useEffect(() => {
-    setText(value ?? '');
-  }, [value]);
-  const x = useRef(0);
-  const onChange = (v: string) => {
-    if (x.current) clearTimeout(x.current);
-    x.current = window.setTimeout(() => {
-      x.current = 0;
-      onSearch(v);
-    }, 600);
+export function Search(props: { value: string; 'on:search': (value: string) => void }) {
+  const state = vm({ text: props.value, composing: false });
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  watch(props, 'value', (value) => {
+    clearTimeout(timer);
+    state.text = value;
+  });
+  const submit = () => {
+    clearTimeout(timer);
+    props['on:search'](state.text);
   };
+  function schedule() {
+    clearTimeout(timer);
+    if (!state.composing) timer = setTimeout(submit, 600);
+  }
+  onUnmount(() => clearTimeout(timer));
   return (
-    <Space.Compact className='mb-2 w-full'>
-      <Input
-        allowClear
-        value={text}
-        onKeyDown={(evt) => {
-          if (evt.key === 'Enter') {
-            if (x.current) {
-              clearTimeout(x.current);
-              x.current = 0;
-            }
-            onSearch(text);
-          }
-        }}
-        onChange={(e) => {
-          const t = e.target.value;
-          setText(t);
-          onChange(t);
-        }}
-        placeholder={t('Search Icons')}
-      />
-      <Button
-        type='primary'
-        onClick={() => {
-          onSearch(text);
-        }}
-        icon={<span className='icon-[ant-design--search-outlined]'></span>}
-      ></Button>
-    </Space.Compact>
+    <form
+      className='icon-search'
+      role='search'
+      on:submit={(event) => {
+        event.preventDefault();
+        submit();
+      }}
+    >
+      <div className='search-input'>
+        <input
+          type='text'
+          value={state.text}
+          placeholder={t('Search Icons')}
+          aria-label={t('Search Icons')}
+          on:input={(event) => {
+            state.text = event.target.value;
+            schedule();
+          }}
+          on:compositionStart={() => {
+            state.composing = true;
+            clearTimeout(timer);
+          }}
+          on:compositionEnd={() => {
+            state.composing = false;
+            schedule();
+          }}
+          on:keyDown={(event) => {
+            if (event.key === 'Enter' && (event.isComposing || state.composing))
+              event.preventDefault();
+          }}
+        />
+        {state.text && (
+          <button
+            type='button'
+            aria-label={t('Clear search')}
+            className='search-clear'
+            on:click={() => {
+              state.text = '';
+              submit();
+            }}
+          >
+            ×
+          </button>
+        )}
+      </div>
+      <Button primary htmlType='submit' label={t('Search Icons')}>
+        <span className='icon-[ant-design--search-outlined]' />
+      </Button>
+    </form>
   );
-};
+}

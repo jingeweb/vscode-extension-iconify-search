@@ -4,6 +4,7 @@ node_modules
 dist/
 lib/
 types/
+*.tsbuildinfo
 /.idea
 /.tmp
 **/.DS_Store

@@ -3,8 +3,10 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { l10n, window, commands } from 'vscode';
 import type { ExtensionContext } from 'vscode';
+
+import { ExtensionMode, l10n, window, commands } from 'vscode';
+
 import { IconifySearchPanel } from './iconifyPanel';
 
 function readSearchText() {
@@ -27,9 +29,18 @@ function readSearchText() {
 }
 
 export function activate(context: ExtensionContext) {
-  const iconifySearchPanel = new IconifySearchPanel(context.extensionUri);
+  const iconifySearchPanel = new IconifySearchPanel(
+    context.extensionUri,
+    context.globalStorageUri,
+    context.extensionMode === ExtensionMode.Development
+      ? process.env.ICONIFY_WEBVIEW_DEV_SERVER_URL
+      : undefined,
+  );
+
+  void iconifySearchPanel.start();
 
   context.subscriptions.push(
+    iconifySearchPanel,
     commands.registerCommand('iconify.search', async () => {
       const text = await readSearchText();
       if (!text?.trim()) {

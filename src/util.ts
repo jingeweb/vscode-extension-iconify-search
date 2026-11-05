@@ -12,7 +12,7 @@ export function replaceTpl(tpl: string, ctx: Record<string, unknown>) {
   const keys = Object.keys(ctx);
   keys.forEach((k) => {
     const r = new RegExp('\\$' + k + '\\$', 'g');
-    tpl = tpl.replace(r, `${ctx[k]}`);
+    tpl = tpl.replace(r, String(ctx[k]));
   });
   return tpl;
 }

@@ -1,134 +1,102 @@
-import { Button, Form, Modal, Select } from 'antd';
-import type { FC } from 'react';
-import { useMemo } from 'react';
-import type { SettingsData } from '../common';
-import { globalStore } from './store';
-import { vscode } from './vscode';
-import { lang, t } from './locale';
+import { vm, watch } from 'jinge';
 
-const CodeTypeOptions = [
-  {
-    label: 'SVG',
-    value: 'svg',
-  },
-  {
-    label: 'React',
-    value: 'react',
-  },
-  {
-    label: 'Vue',
-    value: 'vue',
-  },
-  {
-    label: 'Tailwind CSS',
-    value: 'tailwindcss',
-  },
-  {
-    label: 'Tailwind CSS React',
-    value: 'tailwindcss-react',
-  },
-  {
-    label: 'Iconify Icon',
-    value: 'iconify-icon',
-  },
-  {
-    label: 'Unplugin Icons',
-    value: 'unplugin-icons',
-  },
-  {
-    label: 'UnoCSS',
-    value: 'unocss',
-  },
-  {
-    label: 'UnoCSS React',
-    value: 'unocss-react',
-  },
+import type { IconCodeType } from '../common';
+
+import { Button } from './components/Button';
+import { Modal } from './components/Modal';
+import { Select, type SelectOption } from './components/Select';
+import { t } from './locale';
+import { globalStore, saveSettings } from './store';
+
+const codeTypes: SelectOption[] = [
+  { label: 'SVG', value: 'svg' },
+  { label: 'React', value: 'react' },
+  { label: 'Vue', value: 'vue' },
+  { label: 'Tailwind CSS', value: 'tailwindcss' },
+  { label: 'Tailwind CSS React', value: 'tailwindcss-react' },
+  { label: 'Iconify Icon', value: 'iconify-icon' },
+  { label: 'Unplugin Icons', value: 'unplugin-icons' },
+  { label: 'UnoCSS', value: 'unocss' },
+  { label: 'UnoCSS React', value: 'unocss-react' },
 ];
-
-export const SettingsContent: FC<{
-  onClose: () => void;
-}> = ({ onClose }) => {
-  const [form] = Form.useForm<Omit<SettingsData, 'favorIcons'>>();
-  const [all] = globalStore.useStore('all');
-  const GroupOptions = useMemo(() => {
-    return [...all.entries()].map(([key, val]) => {
-      return {
-        label: val.name,
-        value: key,
-      };
-    });
-  }, [all]);
-
-  return (
-    <Form
-      form={form}
-      className='pt-2'
-      labelCol={{ span: 6 }}
-      wrapperCol={{ span: 18 }}
-      initialValues={{
-        codeType: globalStore.get('codeType'),
-        favorTabs: globalStore.get('favorTabs'),
-        favorGroup: globalStore.get('favorGroup') || undefined,
-      }}
-    >
-      <Form.Item label={t('Type of Code')} name='codeType'>
-        <Select options={CodeTypeOptions} />
-      </Form.Item>
-      <Form.Item label={t('Tabs Displyed First')} name='favorTabs'>
-        <Select options={GroupOptions} mode='multiple' />
-      </Form.Item>
-      <Form.Item label={t('Default Open Tab')} name='favorGroup'>
-        <Select
-          options={GroupOptions}
-          showSearch
-          filterOption={(input: string, option?: { label: string; value: string }) =>
-            (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
-          }
-          placeholder={t('ALL')}
-          allowClear
-        />
-      </Form.Item>
-      <div className='flex justify-end gap-4'>
-        <Button
-          onClick={() => {
-            onClose();
-          }}
-        >
-          {t('Cancel')}
-        </Button>
-        <Button
-          onClick={() => {
-            void form.validateFields().then((data) => {
-              if (!data.favorGroup) data.favorGroup = ''; // undefined 转成空值，才能保存到 vscode settings 里。
-              Object.entries(data).forEach(([k, v]) => {
-                globalStore.set(k as keyof SettingsData, v);
-              });
-              vscode.postMessage({
-                type: 'save:settings',
-                data,
-              });
-              onClose();
-            });
-          }}
-          type='primary'
-        >
-          {t('Confirm')}
-        </Button>
-      </div>
-    </Form>
+export function SettingsContent(props: { 'on:close': () => void }) {
+  const state = vm({
+    codeType: globalStore.codeType || 'tailwindcss-react',
+    favorTabs: [...globalStore.favorTabs],
+    favorGroup: globalStore.favorGroup,
+    groups: [] as SelectOption[],
+  });
+  watch(
+    globalStore,
+    'all',
+    () => {
+      state.groups = [...globalStore.all.values()].map((group) => ({
+        label: group.name,
+        value: group.category,
+      }));
+    },
+    { immediate: true },
   );
-};
-export const SettingsModal: FC<{ open: boolean; onClose: () => void }> = ({ open, onClose }) => {
   return (
-    <Modal
-      width={lang === 'en' ? 600 : 450}
-      destroyOnClose
-      footer={null}
-      open={open}
-      onCancel={() => onClose()}
-      title={t('Settings')}
-    >
-      <SettingsContent onClose={onClose} />
+    <Modal title={t('Settings')} on:close={props['on:close']}>
+      <form
+        className='settings-form'
+        on:submit={(event) => {
+          event.preventDefault();
+          saveSettings({
+            codeType: state.codeType as IconCodeType,
+            favorTabs: [...state.favorTabs],
+            favorGroup: state.favorGroup || '',
+          });
+          props['on:close']();
+        }}
+      >
+        <div className='settings-field'>
+          <label htmlFor='code-type'>{t('Type of Code')}</label>
+          <Select
+            id='code-type'
+            options={codeTypes}
+            value={[state.codeType]}
+            on:change={(values) => {
+              state.codeType = values[0] as IconCodeType;
+            }}
+          />
+        </div>
+        <div className='settings-field'>
+          <label htmlFor='favor-tabs'>{t('Tabs Displyed First')}</label>
+          <Select
+            id='favor-tabs'
+            options={state.groups}
+            value={state.favorTabs}
+            searchable
+            multiple
+            clearable
+            on:change={(values) => {
+              state.favorTabs = values;
+            }}
+          />
+        </div>
+        <div className='settings-field'>
+          <label htmlFor='favor-group'>{t('Default Open Tab')}</label>
+          <Select
+            id='favor-group'
+            options={state.groups}
+            value={state.favorGroup ? [state.favorGroup] : []}
+            searchable
+            clearable
+            placeholder={t('ALL')}
+            on:change={(values) => {
+              state.favorGroup = values[0] ?? '';
+            }}
+          />
+        </div>
+        <footer className='settings-actions'>
+          <Button on:click={() => props['on:close']()}>{t('Cancel')}</Button>
+          <Button primary htmlType='submit'>
+            {t('Confirm')}
+          </Button>
+        </footer>
+      </form>
     </Modal>
   );
-};
+}

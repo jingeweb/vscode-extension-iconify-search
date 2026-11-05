@@ -3,9 +3,13 @@ out/**/*.map
 src/**
 scripts/**
 .gitignore
+.oxlintrc.json
+.oxfmtrc.json
+.oxfmtignore
 tsconfig.json
 tsconfig.node.json
 *.js
 *.mjs
 *.cjs
 node_modules
+tests/**

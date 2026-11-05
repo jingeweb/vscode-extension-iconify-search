@@ -20,10 +20,10 @@ export const ${dashToCamel(icon.name)}: FC<SVGProps<SVGSVGElement>> = (props) =>
   return (${icon.body.replace(' viewBox=', ' {...props} viewBox=')})
 }`;
   } else if (type === 'vue') {
-    return `<script setup lang="ts">
+    return `<script lang="ts">
 import { defineComponent } from 'vue';
-defineComponent({
-  name: ${dashToCamel(icon.name)},
+export default defineComponent({
+  name: ${JSON.stringify(dashToCamel(icon.name))},
 });
 </script>
 <template>

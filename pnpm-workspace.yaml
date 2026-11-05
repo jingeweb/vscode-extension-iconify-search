@@ -1,0 +1,11 @@
+allowBuilds:
+  '@swc/core': true
+  esbuild: true
+minimumReleaseAgeExclude:
+  - jinge@4.2.1
+  - jinge-compiler-darwin-arm64@4.2.1
+  - jinge-compiler-darwin-x64@4.2.1
+  - jinge-compiler-linux-arm64@4.2.1
+  - jinge-compiler-linux-x64@4.2.1
+  - jinge-compiler-win32-x64@4.2.1
+  - jinge-compiler@4.2.1

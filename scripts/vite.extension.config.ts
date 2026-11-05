@@ -1,19 +1,25 @@
-import path from 'path';
 import { builtinModules } from 'module';
+import path from 'path';
 import { defineConfig } from 'vite';
-import tsconfigPaths from 'vite-tsconfig-paths';
 
-const watch = process.argv[6] === '--watch';
+const __dirname = import.meta.dirname;
+const watch = process.argv.includes('--watch');
 
 // https://vitejs.dev/config/
 export default defineConfig({
-  plugins: [
-    // HtmlImportPlugin,
-    tsconfigPaths({
-      projects: [path.resolve(__dirname, '../tsconfig.json')],
-    }),
-  ],
-
+  plugins: watch
+    ? [
+        {
+          name: 'iconify-extension-ready',
+          writeBundle() {
+            console.log('ICONIFY_EXTENSION_READY');
+          },
+        },
+      ]
+    : [],
+  resolve: {
+    tsconfigPaths: true,
+  },
   build: {
     watch: watch ? {} : undefined,
     minify: watch ? false : true,
@@ -21,12 +27,15 @@ export default defineConfig({
     emptyOutDir: false,
     sourcemap: watch ? true : false,
     lib: {
-      fileName: () => 'extension.cjs',
-      entry: path.resolve(__dirname, `../src/extension.ts`),
+      fileName: (_format, entryName) => `${entryName}.cjs`,
+      entry: {
+        extension: path.resolve(__dirname, '../src/extension.ts'),
+        iconifyDatabaseWorker: path.resolve(__dirname, '../src/iconifyDatabaseWorker.ts'),
+      },
       formats: ['cjs'],
     },
     rollupOptions: {
-      external: ['vscode', ...builtinModules],
+      external: ['vscode', /^node:/, ...builtinModules],
     },
   },
 });
