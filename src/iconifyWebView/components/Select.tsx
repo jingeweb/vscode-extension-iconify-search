@@ -18,8 +18,17 @@ export function Select(props: {
 }) {
   const element = ref<HTMLDivElement>();
   const input = ref<HTMLInputElement>();
+  let panel: HTMLDivElement | undefined;
+  let observer: ResizeObserver | undefined;
+  let frame = 0;
   const listId = `select-${uid()}`;
-  const state = vm({ open: false, query: '', active: 0, filtered: [] as SelectOption[] });
+  const state = vm({
+    open: false,
+    searching: false,
+    query: '',
+    active: 0,
+    filtered: [] as SelectOption[],
+  });
   const filter = () => {
     state.filtered = props.options.filter((option) =>
       option.label.toLowerCase().includes(state.query.toLowerCase()),
@@ -28,8 +37,20 @@ export function Select(props: {
   };
   watch(state, 'query', filter);
   watch(props, 'options', filter, { immediate: true });
+  let restoringFocus = false;
+  function remove(value: string, button: HTMLButtonElement) {
+    const restoreFocus = document.activeElement === button;
+    props['on:change'](props.value.filter((selected) => selected !== value));
+    if (restoreFocus) {
+      restoringFocus = true;
+      input.value?.focus();
+      restoringFocus = false;
+    }
+  }
   function choose(value: string) {
     const selected = new Set(props.value);
+    state.query = '';
+    state.searching = false;
     if (props.multiple) {
       if (selected.has(value)) selected.delete(value);
       else selected.add(value);
@@ -43,12 +64,43 @@ export function Select(props: {
   function open() {
     state.open = true;
     state.query = '';
+    state.searching = false;
     filter();
+  }
+  function beginSearch(target: HTMLInputElement) {
+    if (!props.searchable || state.searching) return;
+    // Selected labels are display text, not part of the next search or IME composition.
+    target.value = '';
+    state.query = '';
+    state.searching = true;
   }
   function display(values: string[], options: SelectOption[]) {
     return values
       .map((value) => options.find((option) => option.value === value)?.label ?? value)
       .join(', ');
+  }
+  function position() {
+    if (!state.open || !element.value?.isConnected || !panel?.isConnected) return;
+    const rect = element.value.getBoundingClientRect();
+    const gap = 4;
+    const edge = 8;
+    const below = Math.max(0, window.innerHeight - rect.bottom - gap - edge);
+    const above = Math.max(0, rect.top - gap - edge);
+    const width = Math.max(0, Math.min(rect.width, window.innerWidth - edge * 2));
+    panel.style.width = `${width}px`;
+    panel.style.maxHeight = '180px';
+    const down = below >= panel.offsetHeight || below >= above;
+    panel.style.maxHeight = `${Math.min(180, down ? below : above)}px`;
+    panel.style.left = `${Math.max(edge, Math.min(rect.left, window.innerWidth - width - edge))}px`;
+    panel.style.top = `${down ? rect.bottom + gap : Math.max(edge, rect.top - gap - panel.offsetHeight)}px`;
+    panel.style.visibility = 'visible';
+  }
+  function schedulePosition() {
+    if (!frame)
+      frame = requestAnimationFrame(() => {
+        frame = 0;
+        position();
+      });
   }
   onMount(() => {
     const outside = (event: PointerEvent) => {
@@ -58,65 +110,116 @@ export function Select(props: {
       if (!element.value?.contains(event.relatedTarget as Node)) state.open = false;
     };
     const root = element.value!;
+    observer = new ResizeObserver(schedulePosition);
+    observer.observe(root);
+    if (panel) observer.observe(panel);
+    const scroll = (event: Event) => {
+      if (!panel?.contains(event.target as Node)) schedulePosition();
+    };
     root.addEventListener('focusout', blur);
     document.addEventListener('pointerdown', outside);
+    window.addEventListener('resize', schedulePosition);
+    window.addEventListener('scroll', scroll, true);
     return () => {
+      observer?.disconnect();
+      cancelAnimationFrame(frame);
       root.removeEventListener('focusout', blur);
       document.removeEventListener('pointerdown', outside);
+      window.removeEventListener('resize', schedulePosition);
+      window.removeEventListener('scroll', scroll, true);
     };
   });
   return (
     <div ref={element} className='ui-select'>
       <div className='ui-select-control'>
-        <input
-          ref={input}
-          id={props.id}
-          role='combobox'
-          aria-expanded={state.open}
-          aria-controls={listId}
-          aria-autocomplete={props.searchable ? 'list' : 'none'}
-          aria-activedescendant={
-            state.open && state.filtered.length ? `${listId}-${state.active}` : undefined
-          }
-          autoComplete='off'
-          readOnly={!props.searchable}
-          value={state.open && props.searchable ? state.query : display(props.value, props.options)}
-          placeholder={props.placeholder}
-          title={display(props.value, props.options)}
-          on:focus={open}
-          on:click={() => {
-            if (!state.open) open();
-          }}
-          on:input={(event) => {
-            state.query = event.target.value;
-            state.open = true;
-          }}
-          on:keyDown={(event) => {
-            if (event.key === 'Escape' && state.open) {
-              event.preventDefault();
-              event.stopPropagation();
-              state.open = false;
-            } else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-              event.preventDefault();
-              if (!state.open) open();
-              else
-                state.active = Math.max(
-                  0,
-                  Math.min(
-                    state.filtered.length - 1,
-                    state.active + (event.key === 'ArrowDown' ? 1 : -1),
-                  ),
-                );
-              element.value
-                ?.querySelector(`#${listId}-${state.active}`)
-                ?.scrollIntoView({ block: 'nearest' });
-            } else if (event.key === 'Enter' && state.open) {
-              event.preventDefault();
-              const option = state.filtered[state.active];
-              if (option) choose(option.value);
+        <div className={cx('ui-select-values', props.multiple && 'multiple')}>
+          {props.multiple && (
+            <For loop={props.value} key={KEY_DATA}>
+              {(each) => (
+                <span className='ui-select-tag'>
+                  <span className='ui-select-tag-label' title={display([each.data], props.options)}>
+                    {display([each.data], props.options)}
+                  </span>
+                  <button
+                    type='button'
+                    className='ui-select-tag-remove'
+                    aria-label={`${t('Remove selection')}: ${display([each.data], props.options)}`}
+                    title={t('Remove selection')}
+                    on:mouseDown={(event) => event.preventDefault()}
+                    on:click={(event) =>
+                      remove(each.data, event.currentTarget as HTMLButtonElement)
+                    }
+                  >
+                    <span className='icon-[codicon--close]' aria-hidden='true' />
+                  </button>
+                </span>
+              )}
+            </For>
+          )}
+          <input
+            ref={input}
+            id={props.id}
+            role='combobox'
+            aria-expanded={state.open}
+            aria-controls={listId}
+            aria-autocomplete={props.searchable ? 'list' : 'none'}
+            aria-activedescendant={
+              state.open && state.filtered.length ? `${listId}-${state.active}` : undefined
             }
-          }}
-        />
+            autoComplete='off'
+            readOnly={!props.searchable}
+            value={
+              props.multiple
+                ? state.open
+                  ? state.query
+                  : ''
+                : state.open && state.searching && props.searchable
+                  ? state.query
+                  : display(props.value, props.options)
+            }
+            placeholder={props.multiple && props.value.length ? undefined : props.placeholder}
+            title={display(props.value, props.options)}
+            on:focus={() => {
+              if (!restoringFocus) open();
+            }}
+            on:click={() => {
+              if (!state.open) open();
+            }}
+            on:beforeInput={(event) => beginSearch(event.target)}
+            on:compositionStart={(event) => beginSearch(event.target)}
+            on:input={(event) => {
+              state.query = event.target.value;
+              state.searching = true;
+              state.open = true;
+            }}
+            on:keyDown={(event) => {
+              if (event.isComposing) return;
+              if (event.key === 'Escape' && state.open) {
+                event.preventDefault();
+                event.stopPropagation();
+                state.open = false;
+              } else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+                event.preventDefault();
+                if (!state.open) open();
+                else
+                  state.active = Math.max(
+                    0,
+                    Math.min(
+                      state.filtered.length - 1,
+                      state.active + (event.key === 'ArrowDown' ? 1 : -1),
+                    ),
+                  );
+                element.value
+                  ?.querySelector(`#${listId}-${state.active}`)
+                  ?.scrollIntoView({ block: 'nearest' });
+              } else if (event.key === 'Enter' && state.open) {
+                event.preventDefault();
+                const option = state.filtered[state.active];
+                if (option) choose(option.value);
+              }
+            }}
+          />
+        </div>
         {props.clearable && !!props.value.length && (
           <button
             type='button'
@@ -125,17 +228,27 @@ export function Select(props: {
             on:click={() => {
               props['on:change']([]);
               state.query = '';
+              state.searching = false;
             }}
           >
-            ×
+            <span className='icon-[codicon--close]' />
           </button>
         )}
         <span className='ui-select-arrow' aria-hidden='true'>
-          ⌄
+          <span className='icon-[codicon--chevron-down]' />
         </span>
       </div>
       {state.open && (
         <div
+          ref={(value: HTMLDivElement | undefined) => {
+            if (panel) observer?.unobserve(panel);
+            panel = value;
+            if (value) {
+              value.style.visibility = 'hidden';
+              observer?.observe(value);
+              queueMicrotask(position);
+            }
+          }}
           id={listId}
           role='listbox'
           aria-multiselectable={props.multiple || undefined}

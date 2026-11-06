@@ -4,6 +4,26 @@ import { runInNewContext } from 'node:vm';
 
 import { getIconCode } from '../src/iconifyWebView/code.ts';
 
+await test('copies the plain icon name', () => {
+  const icon = {
+    category: 'solar',
+    id: 'solar:eye-broken-line-duotone',
+    name: 'eye-broken-line-duotone',
+    body: '<svg viewBox="0 0 24 24"></svg>',
+  };
+  assert.equal(getIconCode(icon, 'name'), 'solar:eye-broken-line-duotone');
+});
+
+await test('copies the Iconify React component', () => {
+  const icon = {
+    category: 'solar',
+    id: 'solar:eye-broken-line-duotone',
+    name: 'eye-broken-line-duotone',
+    body: '<svg viewBox="0 0 24 24"></svg>',
+  };
+  assert.equal(getIconCode(icon, 'iconify-react'), '<Icon icon="solar:eye-broken-line-duotone" />');
+});
+
 await test('generated Vue components export a component with a literal name', () => {
   for (const name of ['arrow-left', '3d-cube', 'quote"mark']) {
     const svg = '<svg viewBox="0 0 16 16"><path d="M1 1h8v8H1z" /></svg>';

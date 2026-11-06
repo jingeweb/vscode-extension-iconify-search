@@ -1,5 +1,4 @@
 @import 'tailwindcss';
-@config '../../tailwind.config.js';
 @plugin '@iconify/tailwind4';
 @source '../**/*.{ts,tsx,html}';
 
@@ -183,8 +182,7 @@ input:focus-visible {
 .search-input input::placeholder {
   color: var(--ui-muted);
 }
-.search-clear,
-.ui-select-clear {
+.search-clear {
   padding: 2px 7px;
   background: transparent;
   color: var(--ui-muted);
@@ -295,7 +293,7 @@ input:focus-visible {
   margin-bottom: 4px;
 }
 .favorite-toggle {
-  color: var(--antd-orange, #fa8c16);
+  color: var(--vscode-charts-orange, #fa8c16);
 }
 .icon-details-line {
   color: var(--ui-muted);
@@ -383,18 +381,90 @@ input:focus-visible {
   outline: none;
   text-overflow: ellipsis;
 }
-.ui-select-arrow {
+.ui-select-values {
+  flex: 1;
+  min-width: 0;
+}
+.ui-select-values.multiple {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 6px;
+}
+.ui-select-values.multiple input {
+  flex: 1;
+  width: 32px;
+  min-width: 32px;
+  padding: 1px 4px;
+}
+.ui-select-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  max-width: 100%;
+  min-width: 0;
+  padding: 1px 3px 1px 6px;
+  border-radius: 3px;
+  background: var(--ui-hover);
+}
+.ui-select-tag-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ui-select-tag-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   flex-shrink: 0;
-  padding-right: 9px;
-  pointer-events: none;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 2px;
+  background: transparent;
+  color: var(--ui-muted);
+  cursor: pointer;
+}
+.ui-select-tag-remove:hover {
+  background: var(--vscode-toolbar-hoverBackground, #80808033);
+  color: var(--ui-foreground);
+}
+.ui-select-tag-remove > span {
+  width: 12px;
+  height: 12px;
+}
+.ui-select-clear,
+.ui-select-arrow {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  padding: 0;
   color: var(--ui-muted);
 }
+.ui-select-clear {
+  background: transparent;
+  border: 0;
+}
+.ui-select-clear > span,
+.ui-select-arrow > span {
+  display: block;
+  width: 16px;
+  height: 16px;
+}
+.ui-select-arrow {
+  margin-right: 4px;
+  pointer-events: none;
+}
 .ui-select-options {
-  position: relative;
-  z-index: 2;
+  position: fixed;
+  z-index: 1000;
   max-height: 180px;
   padding: 4px;
-  margin-top: 4px;
   overflow: auto;
   border: 1px solid var(--ui-border);
   border-radius: 6px;

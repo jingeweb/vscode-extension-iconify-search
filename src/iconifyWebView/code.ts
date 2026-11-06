@@ -10,6 +10,10 @@ export function getIconCode(icon: Icon, type: IconCodeType) {
     return `<div ${type === 'unocss-react' ? 'className' : 'class'}="i-${icon.category}:${icon.name}"></div>`;
   } else if (type === 'iconify-icon') {
     return `<iconify-icon icon="${icon.category}:${icon.name}"></iconify-icon>`;
+  } else if (type === 'iconify-react') {
+    return `<Icon icon="${icon.category}:${icon.name}" />`;
+  } else if (type === 'name') {
+    return `${icon.category}:${icon.name}`;
   } else if (type === 'unplugin-icons') {
     return `import ${dashToCamel(icon.name)} from '~icons/${icon.category}/${icon.name}';`;
   } else if (type === 'svg') {

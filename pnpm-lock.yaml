@@ -21,12 +21,9 @@ importers:
         specifier: ^7.5.22
         version: 7.5.22
     devDependencies:
-      '@ant-design/colors':
-        specifier: ^8.0.1
-        version: 8.0.1
-      '@iconify/json':
-        specifier: ^2.2.553
-        version: 2.2.553
+      '@iconify-json/codicon':
+        specifier: ^1.2.77
+        version: 1.2.77
       '@iconify/tailwind4':
         specifier: ^1.2.3
         version: 1.2.3(tailwindcss@4.3.4)
@@ -86,13 +83,6 @@ importers:
         version: 8.3.5(@types/node@26.6.6)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1)
 
 packages:
-
-  '@ant-design/colors@8.0.1':
-    resolution: {integrity: sha512-foPVl0+SWIslGUtD/xBr1p9U4AKzPhNYEseXYRRo5QSzGACYZrQbe11AYJbYfAWnWSpGBx6JjBmSeugUsD9vqQ==}
-
-  '@ant-design/fast-color@3.0.1':
-    resolution: {integrity: sha512-esKJegpW4nckh0o6kV3Tkb7NPIZYbPnnFxmQDUmL08ukXZAvV85TZBr70eGuke/CIArLaP6aw8lt9KILjnWuOw==}
-    engines: {node: '>=8.x'}
 
   '@antfu/install-pkg@2.1.0':
     resolution: {integrity: sha512-sdg9NxU3zR4Mnawfbc/x6GB5Wf17WYud5qOuEuxXjaKpYpMkISSJEjItGebXJ2bQ4DIcly4NYH23mtkGJjvKUw==}
@@ -288,8 +278,8 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@iconify/json@2.2.553':
-    resolution: {integrity: sha512-wJiXvMppZufZiRtHNnvL/BfIQONajWDEbTmBPqWMFX2HSOLj54FGmhmp5M56ErYfyS39s9RKS1PhQOBiBy+L4w==}
+  '@iconify-json/codicon@1.2.77':
+    resolution: {integrity: sha512-fvqdKpZVca3YjYwysnHqNBOnzyVChI8HU8cct8yPfRdGZmnTpKoLVyAS65gL5ZmQ88Sfsby9WDmHzRzDgEd7/A==}
 
   '@iconify/tailwind4@1.2.3':
     resolution: {integrity: sha512-z8SKiMHRASJKF/IY//87MF88lcB7ulxh8vlhQXXLWsBkNtOh6ese9R41MyGpQeqXdRvQVt+/fX2glQtHFjQ+MA==}
@@ -1626,12 +1616,6 @@ packages:
 
 snapshots:
 
-  '@ant-design/colors@8.0.1':
-    dependencies:
-      '@ant-design/fast-color': 3.0.1
-
-  '@ant-design/fast-color@3.0.1': {}
-
   '@antfu/install-pkg@2.1.0':
     dependencies:
       package-manager-detector: 1.9.0
@@ -1783,10 +1767,9 @@ snapshots:
   '@esbuild/win32-x64@0.28.2':
     optional: true
 
-  '@iconify/json@2.2.553':
+  '@iconify-json/codicon@1.2.77':
     dependencies:
       '@iconify/types': 2.0.0
-      pathe: 2.0.3
 
   '@iconify/tailwind4@1.2.3(tailwindcss@4.3.4)':
     dependencies:

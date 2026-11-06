@@ -1,7 +1,3 @@
-<p align="right">
-  <a href="./README.md">English</a>
-</p>
-
 <p align="center">
 <a href="https://iconify.design">
 <img src="https://github.com/YuhangGe/vscode-extension-iconify-search/blob/main/resources/logo.png?raw=true" alt="logo" width='128'/>
@@ -16,6 +12,10 @@
 <a href="https://github.com/YuhangGe/vscode-extension-iconify-search" target="__blank"><img src="https://img.shields.io/github/last-commit/YuhangGe/vscode-extension-iconify-search.svg?color=c977be" alt="GitHub last commit" /></a>
 <a href="https://github.com/YuhangGe/vscode-extension-iconify-search/issues" target="__blank"><img src="https://img.shields.io/github/issues/YuhangGe/vscode-extension-iconify-search.svg?color=a38eed" alt="GitHub issues" /></a>
 <a href="https://github.com/YuhangGe/vscode-extension-iconify-search" target="__blank"><img alt="GitHub stars" src="https://img.shields.io/github/stars/YuhangGe/vscode-extension-iconify-search?style=social"></a>
+</p>
+
+<p align="left">
+  <a href="./README.md">English</a>
 </p>
 
 # Iconify Search

@@ -17,12 +17,14 @@ export interface IconCategory {
 }
 
 export type IconCodeType =
+  | 'name'
   | 'svg'
   | 'react'
   | 'vue'
   | 'tailwindcss'
   | 'tailwindcss-react'
   | 'iconify-icon'
+  | 'iconify-react'
   | 'unplugin-icons'
   | 'unocss'
   | 'unocss-react';

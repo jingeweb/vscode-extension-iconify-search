@@ -28,9 +28,11 @@ export function Modal(props: WithChildren<JNode> & { title: string; 'on:close': 
       className='ui-modal'
       aria-labelledby={titleId}
       on:click={(event) => {
-        const rect = element.value!.getBoundingClientRect();
+        // A child button can close the modal before its click bubbles here.
+        const dialog = event.currentTarget as HTMLDialogElement;
+        const rect = dialog.getBoundingClientRect();
         if (
-          event.target === element.value &&
+          event.target === dialog &&
           (event.clientX < rect.left ||
             event.clientX > rect.right ||
             event.clientY < rect.top ||
@@ -42,7 +44,7 @@ export function Modal(props: WithChildren<JNode> & { title: string; 'on:close': 
       <div className='ui-modal-header'>
         <h2 id={titleId}>{props.title}</h2>
         <Button quiet small label={t('Cancel')} on:click={() => props['on:close']()}>
-          <span aria-hidden='true'>×</span>
+          <span aria-hidden='true' className='icon-[codicon--close]'></span>
         </Button>
       </div>
       {props.children}

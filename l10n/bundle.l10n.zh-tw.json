@@ -35,5 +35,6 @@
   "Downloading Iconify {0}: {1} MB downloaded": "正在下載 Iconify {0}：已下載 {1} MB",
   "Preparing Iconify database: {0}/{1} collections": "正在準備 Iconify 資料庫：{0}/{1} 個圖標集",
   "Could not load icons. Please try again.": "無法載入圖標，請重試。",
-  "Retry": "重試"
+  "Retry": "重試",
+  "Remove selection": "移除選項"
 }

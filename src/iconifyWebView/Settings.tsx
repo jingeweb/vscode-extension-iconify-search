@@ -9,12 +9,14 @@ import { t } from './locale';
 import { globalStore, saveSettings } from './store';
 
 const codeTypes: SelectOption[] = [
+  { label: 'Icon Name', value: 'name' },
   { label: 'SVG', value: 'svg' },
   { label: 'React', value: 'react' },
   { label: 'Vue', value: 'vue' },
   { label: 'Tailwind CSS', value: 'tailwindcss' },
   { label: 'Tailwind CSS React', value: 'tailwindcss-react' },
   { label: 'Iconify Icon', value: 'iconify-icon' },
+  { label: 'Iconify React', value: 'iconify-react' },
   { label: 'Unplugin Icons', value: 'unplugin-icons' },
   { label: 'UnoCSS', value: 'unocss' },
   { label: 'UnoCSS React', value: 'unocss-react' },

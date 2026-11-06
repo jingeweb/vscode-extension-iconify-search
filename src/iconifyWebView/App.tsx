@@ -49,7 +49,7 @@ export function App() {
                 state.settingsOpen = true;
               }}
             >
-              <span className='icon-[ant-design--setting-outlined]' />
+              <span className='icon-[codicon--settings-gear]' />
             </Button>
           </header>
           {globalStore.topTab === 'all' ? <IconsView /> : <FavoritesView />}

@@ -81,7 +81,7 @@ await test(
       await server?.close();
       await fs.rm(directory, { recursive: true, force: true });
     });
-    for (const name of ['src', 'l10n', 'tailwind.config.js', 'tsconfig.json', 'package.json']) {
+    for (const name of ['src', 'l10n', 'tsconfig.json', 'package.json']) {
       await fs.cp(path.join(project, name), path.join(directory, name), { recursive: true });
     }
     await fs.symlink(
@@ -266,6 +266,92 @@ await test(
       },
     );
     await t.test(
+      'select dropdowns float without resizing the modal and flip inside a short viewport',
+      async () => {
+        await page.evaluate((groups) => {
+          window.__groups = [
+            ...groups,
+            ...Array.from({ length: 40 }, (_, index) => ({
+              prefix: 'extra-' + index,
+              info: { name: 'Extra ' + index },
+              icons: {},
+            })),
+          ];
+          window.__generation++;
+          window.__sendCatalog();
+        }, groups);
+        await page.getByRole('button', { name: 'Settings', exact: true }).click();
+        const dialog = page.getByRole('dialog', { name: 'Settings', exact: true });
+        await dialog.getByRole('heading', { name: 'Settings', exact: true }).click();
+        const before = await dialog.boundingBox();
+        const confirmBefore = await dialog
+          .getByRole('button', { name: 'Confirm', exact: true })
+          .boundingBox();
+        const multi = dialog.getByLabel('Tabs Displyed First', { exact: true });
+        await multi.click();
+        const list = dialog.getByRole('listbox');
+        await list.waitFor();
+        const after = await dialog.boundingBox();
+        const confirmAfter = await dialog
+          .getByRole('button', { name: 'Confirm', exact: true })
+          .boundingBox();
+        assert.equal(
+          after.height,
+          before.height,
+          'opening the dropdown must not resize the dialog',
+        );
+        assert.equal(after.y, before.y, 'opening the dropdown must not shift the dialog');
+        assert.equal(
+          confirmAfter.y,
+          confirmBefore.y,
+          'opening the dropdown must not move the footer',
+        );
+        const bounds = await list.boundingBox();
+        assert.ok(
+          bounds.y + bounds.height > after.y + after.height,
+          'fixture should extend beyond the dialog',
+        );
+        assert.equal(
+          await list.evaluate((element) => {
+            const rect = element.getBoundingClientRect();
+            return element.contains(
+              document.elementFromPoint(rect.left + rect.width / 2, rect.bottom - 12),
+            );
+          }),
+          true,
+          'floating options must remain interactive outside the dialog bounds',
+        );
+        await multi.press('Escape');
+        await page.setViewportSize({ width: 900, height: 260 });
+        const shortBefore = await dialog.boundingBox();
+        const single = dialog.getByLabel('Default Open Tab', { exact: true });
+        await single.click();
+        await list.waitFor();
+        const control = await single.locator('..').locator('..').boundingBox();
+        const flipped = await list.boundingBox();
+        assert.equal((await dialog.boundingBox()).height, shortBefore.height);
+        assert.ok(
+          flipped.y >= 7 && flipped.y + flipped.height <= 253,
+          'dropdown must stay within the viewport',
+        );
+        assert.ok(
+          flipped.y + flipped.height <= control.y,
+          'dropdown should flip above when there is insufficient space below',
+        );
+        await dialog.getByRole('option', { name: 'Alpha', exact: true }).click();
+        assert.equal(await single.inputValue(), 'Alpha');
+        await dialog.getByRole('button', { name: 'Cancel', exact: true }).last().click();
+        await dialog.waitFor({ state: 'detached' });
+        await page.setViewportSize({ width: 900, height: 600 });
+        await page.evaluate((groups) => {
+          window.__groups = groups;
+          window.__generation++;
+          window.__sendCatalog();
+        }, groups);
+        await page.getByRole('button', { name: 'Copy icon: heart', exact: true }).waitFor();
+      },
+    );
+    await t.test(
       'saves searchable multi-select settings, cancels drafts and restores dialog focus',
       async () => {
         const settingsButton = page.getByRole('button', { name: 'Settings', exact: true });
@@ -273,15 +359,71 @@ await test(
         const dialog = page.getByRole('dialog', { name: 'Settings', exact: true });
         await dialog.getByLabel('Type of Code', { exact: true }).click();
         await dialog.getByRole('option', { name: 'Vue', exact: true }).click();
+        assert.equal(await dialog.getByLabel('Type of Code', { exact: true }).inputValue(), 'Vue');
         await dialog.getByLabel('Tabs Displyed First', { exact: true }).fill('Beta');
         await dialog.getByRole('option', { name: 'Beta', exact: true }).click();
+        const multiSelect = dialog.getByLabel('Tabs Displyed First', { exact: true });
+        const tags = dialog.locator('.ui-select-tag-label');
+        assert.deepEqual(
+          await tags.allTextContents(),
+          ['Beta'],
+          'selected labels appear immediately',
+        );
+        assert.equal(await multiSelect.inputValue(), '', 'selection clears the search input');
+        assert.equal(await multiSelect.getAttribute('aria-expanded'), 'true');
+        await dialog.getByRole('option', { name: 'Alpha', exact: true }).click();
+        assert.deepEqual(await tags.allTextContents(), ['Beta', 'Alpha']);
+        await dialog.getByRole('button', { name: 'Remove selection: Alpha', exact: true }).click();
+        assert.deepEqual(await tags.allTextContents(), ['Beta']);
+        assert.equal(await multiSelect.getAttribute('aria-expanded'), 'true');
+        assert.equal(
+          await dialog
+            .getByRole('option', { name: 'Alpha', exact: true })
+            .getAttribute('aria-selected'),
+          'false',
+        );
+        await multiSelect.press('a');
+        assert.equal(
+          await multiSelect.inputValue(),
+          'a',
+          'selected tags stay separate from the search',
+        );
+        assert.deepEqual(await tags.allTextContents(), ['Beta']);
+        await dialog.getByRole('option', { name: 'Alpha', exact: true }).click();
+        assert.deepEqual(await tags.allTextContents(), ['Beta', 'Alpha']);
+        const removeAlpha = dialog.getByRole('button', {
+          name: 'Remove selection: Alpha',
+          exact: true,
+        });
+        await removeAlpha.focus();
+        await removeAlpha.press('Enter');
+        assert.equal(
+          await multiSelect.evaluate((element) => document.activeElement === element),
+          true,
+        );
+        assert.deepEqual(await tags.allTextContents(), ['Beta']);
         await dialog.getByLabel('Default Open Tab', { exact: true }).fill('Beta');
         await dialog.getByRole('option', { name: 'Beta', exact: true }).click();
+        assert.equal(
+          await dialog.getByLabel('Default Open Tab', { exact: true }).inputValue(),
+          'Beta',
+        );
         await dialog
           .locator('.settings-field')
           .nth(2)
           .getByRole('button', { name: 'Clear selection', exact: true })
           .click();
+        assert.equal(await dialog.getByLabel('Default Open Tab', { exact: true }).inputValue(), '');
+        await dialog.getByRole('button', { name: 'Remove selection: Beta', exact: true }).click();
+        assert.equal(
+          await tags.count(),
+          0,
+          'the last tag can also be removed while the dropdown is closed',
+        );
+        await multiSelect.fill('Beta');
+        await dialog.getByRole('option', { name: 'Beta', exact: true }).click();
+        assert.deepEqual(await tags.allTextContents(), ['Beta']);
+        await multiSelect.press('Escape');
         await dialog.getByRole('button', { name: 'Confirm', exact: true }).click();
         await dialog.waitFor({ state: 'detached' });
         const messages = await page.evaluate(() =>

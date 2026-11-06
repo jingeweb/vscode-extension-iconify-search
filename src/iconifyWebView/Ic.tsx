@@ -43,8 +43,8 @@ function IconDetails(props: { icon: Icon }) {
           <span
             className={
               globalStore.favorIcons.includes(props.icon.id)
-                ? 'icon-[ant-design--star-filled]'
-                : 'icon-[ant-design--star-outlined]'
+                ? 'icon-[codicon--star-full]'
+                : 'icon-[codicon--star-empty]'
             }
           />
         </Button>
@@ -105,7 +105,7 @@ export function Ic(props: { icon: Icon }) {
               void copy();
             }}
           >
-            <span className='icon-[ant-design--copy-outlined]' />
+            <span className='icon-[codicon--copy]' />
           </Button>
           <Button
             small
@@ -118,7 +118,7 @@ export function Ic(props: { icon: Icon }) {
               })
             }
           >
-            <span className='icon-[material-symbols--code]' />
+            <span className='icon-[codicon--code]' />
           </Button>
         </div>
       </div>

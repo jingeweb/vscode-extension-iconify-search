@@ -61,12 +61,12 @@ export function Search(props: { value: string; 'on:search': (value: string) => v
               submit();
             }}
           >
-            ×
+            <span className='icon-[codicon--close]' />
           </button>
         )}
       </div>
       <Button primary htmlType='submit' label={t('Search Icons')}>
-        <span className='icon-[ant-design--search-outlined]' />
+        <span className='icon-[codicon--search]' />
       </Button>
     </form>
   );

@@ -15,8 +15,5 @@
   },
   "sortPackageJson": {
     "sortScripts": true
-  },
-  "sortTailwindcss": {
-    "config": "./tailwind.config.js"
   }
 }
