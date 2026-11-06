@@ -1,7 +1,7 @@
 {
   "name": "iconify-search",
   "displayName": "Iconify Search",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "description": "Search Iconify Icons in VS Code",
   "categories": [

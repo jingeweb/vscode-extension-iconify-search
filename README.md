@@ -24,13 +24,14 @@ Search [Iconify](https://icon-sets.iconify.design/) icons directly in VSCode and
 
 ## Usage
 
-Requires VS Code 1.145 or newer for its built-in `node:sqlite`. No project dependency or separately installed Node.js is required.
+Requires VS Code 1.145 or newer.
 
-After VS Code finishes starting, the extension checks npm and prepares icon data in the background, including on the next startup after an interrupted first download. Existing data is available immediately. The initial download notification shows percentage and downloaded/total MB when available, followed by database preparation progress. Simplified Chinese VS Code installations download from npmmirror; other languages download from npm.
+1. Open the **Extensions** view in VS Code (`Ctrl+Shift+X` on Windows/Linux or `Cmd+Shift+X` on macOS).
+2. Search for **Iconify Search** by **geekabe** and click **Install**. You can also install it from the [Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=geekabe.iconify-search).
+3. Open the Command Palette (`Ctrl+Shift+P` on Windows/Linux or `Cmd+Shift+P` on macOS), then search for **Iconify** to browse all icons, search icons, or open your favorites.
+4. Select an icon to copy its code, or use **Insert icon** in its details to insert it into the active editor.
 
-Data is stored in global storage and reused across projects. SQLite indexes icon names and collections; independently compressed icons live in `icons.bin` and share a dictionary per collection. A Node Worker runs database queries and bounded concurrent compression/decompression. The gallery uses cursor pagination, loads more near the bottom, and evicts cached SVG pages by memory size while supporting scroll-back.
-
-Updates are built as complete new generations. Once ready, open panels refresh against the new generation, preserving the search and selected category while resetting scrolling. Old files are removed after all extension windows release them. If an update fails, existing data remains available. Raw JSON is removed after successful conversion.
+Icon data is prepared automatically after installation. Wait for the initial download and preparation to finish before browsing. No project dependencies are required.
 
 ## Features
 
@@ -86,3 +87,13 @@ Use **Run Extension (Production Build)** to build and debug the packaged assets 
 The Webview uses Jinge 4.2 and `jinge-compiler`. UI components live in `src/iconifyWebView/components`; no React, Ant Design component library, or `jinge-antd` runtime dependency is required. Lists use Jinge's `KEY_DATA` keys to work with the Webview CSP without enabling `unsafe-eval`.
 
 Run `pnpm test` with Node.js 24 or newer for database, update coordination, cache, resource loading and gallery layout tests. Run `pnpm test:webview` for browser tests covering search, favorites, copy/insert, settings, virtual scrolling, theme changes, HMR and production assets. Browser tests use an isolated source copy; they do not modify the working tree. They use installed Chrome when available, or Playwright Chromium (`pnpm exec playwright install chromium`). Set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` to use a specific Chromium executable.
+
+### Data storage and updates
+
+Requires VS Code 1.145 or newer for its built-in `node:sqlite`. No project dependency or separately installed Node.js is required.
+
+After VS Code finishes starting, the extension checks npm and prepares icon data in the background, including on the next startup after an interrupted first download. Existing data is available immediately. The initial download notification shows percentage and downloaded/total MB when available, followed by database preparation progress. Simplified Chinese VS Code installations download from npmmirror; other languages download from npm.
+
+Data is stored in global storage and reused across projects. SQLite indexes icon names and collections; independently compressed icons live in `icons.bin` and share a dictionary per collection. A Node Worker runs database queries and bounded concurrent compression/decompression. The gallery uses cursor pagination, loads more near the bottom, and evicts cached SVG pages by memory size while supporting scroll-back.
+
+Updates are built as complete new generations. Once ready, open panels refresh against the new generation, preserving the search and selected category while resetting scrolling. Old files are removed after all extension windows release them. If an update fails, existing data remains available. Raw JSON is removed after successful conversion.

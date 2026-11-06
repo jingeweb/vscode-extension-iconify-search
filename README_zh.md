@@ -24,13 +24,14 @@
 
 ## 使用方法
 
-需要 VS Code 1.145 或更新版本，以使用其内置的 `node:sqlite`。无需在项目中安装依赖，也无需单独安装 Node.js。
+需要 VS Code 1.145 或更新版本。
 
-VS Code 启动完成后，插件会自动从 npm 检查版本并准备数据；首次下载未完成时，后续启动会重新尝试。已有缓存时立即可用。首次下载显示百分比和已下载/总 MB（服务器未提供大小时仅显示已下载量），随后显示数据库准备进度。简体中文环境从 npmmirror 下载，其它语言从 npm 下载。
+1. 打开 VS Code 的**扩展**面板（Windows/Linux：`Ctrl+Shift+X`，macOS：`Cmd+Shift+X`）。
+2. 搜索 **Iconify Search**，找到发布者为 **geekabe** 的插件，点击**安装**。也可以从 [Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=geekabe.iconify-search) 安装。
+3. 打开命令面板（Windows/Linux：`Ctrl+Shift+P`，macOS：`Cmd+Shift+P`），搜索 **Iconify**，选择查看全部图标、搜索图标或查看收藏图标。
+4. 点击图标可复制代码，也可以在图标详情中点击**插入图标**，将代码插入当前编辑器。
 
-数据保存在扩展全局存储中，跨项目复用。SQLite 存储图标名称、分类和搜索索引，图标逐个压缩后存入独立的 `icons.bin`，同一图标集共享压缩字典。数据库和压缩处理在 Worker 中执行，压缩解压使用有并发上限的 Node 原生异步 API。界面按游标分页，滚动接近底部时加载更多；图标页面缓存按内存大小淘汰，往回滚动时按需重读。
-
-更新时完整生成新版本，准备好后自动刷新已打开的界面，保留搜索词和分类，重置滚动位置。各窗口释放旧版本后删除旧文件；更新失败继续使用已有数据。转换成功后清理原始 JSON。
+安装后会自动准备图标数据，首次使用请等待下载和准备完成。无需在项目中安装依赖。
 
 ## 功能
 
@@ -86,3 +87,13 @@ VS Code 启动完成后，插件会自动从 npm 检查版本并准备数据；�
 Webview 使用 Jinge 4.2 和 `jinge-compiler`。必要的 UI 组件实现在 `src/iconifyWebView/components`，不依赖 React、Ant Design 组件库或 `jinge-antd`。列表使用 Jinge 的 `KEY_DATA`，兼容 Webview CSP，无需开启 `unsafe-eval`。
 
 使用 Node.js 24 或更新版本运行 `pnpm test`，覆盖数据库、更新协调、缓存、资源加载和虚拟列表布局；`pnpm test:webview` 运行浏览器交互、HMR 和生产构建测试。浏览器测试使用独立的源码副本，不修改工作区，优先使用已安装的 Chrome，也支持 Playwright Chromium（`pnpm exec playwright install chromium`）或通过 `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` 指定浏览器。
+
+### 数据存储与更新原理
+
+需要 VS Code 1.145 或更新版本，以使用其内置的 `node:sqlite`。无需在项目中安装依赖，也无需单独安装 Node.js。
+
+VS Code 启动完成后，插件会自动从 npm 检查版本并准备数据；首次下载未完成时，后续启动会重新尝试。已有缓存时立即可用。首次下载显示百分比和已下载/总 MB（服务器未提供大小时仅显示已下载量），随后显示数据库准备进度。简体中文环境从 npmmirror 下载，其它语言从 npm 下载。
+
+数据保存在扩展全局存储中，跨项目复用。SQLite 存储图标名称、分类和搜索索引，图标逐个压缩后存入独立的 `icons.bin`，同一图标集共享压缩字典。数据库和压缩处理在 Worker 中执行，压缩解压使用有并发上限的 Node 原生异步 API。界面按游标分页，滚动接近底部时加载更多；图标页面缓存按内存大小淘汰，往回滚动时按需重读。
+
+更新时完整生成新版本，准备好后自动刷新已打开的界面，保留搜索词和分类，重置滚动位置。各窗口释放旧版本后删除旧文件；更新失败继续使用已有数据。转换成功后清理原始 JSON。
